@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en" data-page-node-id="vj88jS4MJ69eKr1FGnVJW0">
+<head data-page-node-id="dHsa4jL6tkYI85Ms8nNshv">
+<meta charset="UTF-8" data-page-node-id="8YnB7Dm5BPAxuMmuQ1I7uS" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="8eaMLluHXpP0pHx1sJQn0h" />
+<title>TennisSet — Offline Scoreboard</title>
+<style>
+  /* ============================================================
+     TENNISSET — broadcast-style offline scoreboard
+     Direction: industrial broadcast. Dark navy court, one mint
+     player vs one coral player, huge tabular numerals, hairline
+     court geometry. No network, no fonts loaded — type is built
+     from system weights (900, uppercase, tight tracking).
+     ============================================================ */
+  :root {
+    --bg: #0B1220;
+    --surface: #101A2E;
+    --surface-2: #0E1626;
+    --line: rgba(255, 255, 255, 0.10);
+    --line-strong: rgba(255, 255, 255, 0.22);
+    --text: #F2F5FA;
+    --muted: #8A94A8;
+    --p1: #00E0A4;
+    --p2: #FF5C7A;
+    --ball: #DFF24B;            /* tennis-ball felt yellow */
+    --radius: 14px;
+    --dur-fast: 200ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- atmosphere: court glows + hairline court geometry --- */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(46rem 30rem at 8% -8%, rgba(0, 224, 164, 0.09), transparent 60%),
+      radial-gradient(46rem 30rem at 96% 108%, rgba(255, 92, 122, 0.09), transparent 60%),
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 100% 25% no-repeat,
+      linear-gradient(90deg, transparent calc(50% - 0.5px), var(--line) calc(50% - 0.5px), var(--line) calc(50% + 0.5px), transparent calc(50% + 0.5px)) no-repeat;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(circle at 50% 50%, transparent 42%, rgba(0, 0, 0, 0.35) 100%);
+  }
+
+  header, main, footer { position: relative; z-index: 1; }
+
+  /* --- header / wordmark --- */
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem clamp(1rem, 4vw, 3rem);
+    border-bottom: 1px solid var(--line);
+  }
+  .wordmark {
+    font-weight: 900;
+    font-size: 1.15rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+  }
+  .wordmark em { font-style: normal; color: var(--muted); }
+  .status {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* --- scoreboard --- */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 3px 1fr;
+    align-content: start;
+    position: relative;
+    max-width: 68rem;
+    width: 100%;
+    margin: 0 auto;
+    padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 3rem);
+    gap: 0.9rem clamp(1rem, 3vw, 2.5rem);
+  }
+  /* faint court geometry behind the scoreboard */
+  main::before {
+    content: "";
+    position: absolute;
+    inset: clamp(0.5rem, 2vw, 1.5rem) clamp(-0.5rem, 1vw, 0rem);
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: none;
+    border-right: none;
+  }
+  main::after {
+    content: "";
+    position: absolute;
+    top: clamp(0.5rem, 2vw, 1.5rem);
+    bottom: clamp(0.5rem, 2vw, 1.5rem);
+    left: 6%;
+    right: 6%;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent calc(24% - 0.5px), rgba(255,255,255,0.05) calc(24% - 0.5px), rgba(255,255,255,0.05) calc(24% + 0.5px), transparent calc(24% + 0.5px)) 0 0 / 100% 100% no-repeat,
+                linear-gradient(90deg, transparent calc(76% - 0.5px), rgba(255,255,255,0.05) calc(76% - 0.5px), rgba(255,255,255,0.05) calc(76% + 0.5px), transparent calc(76% + 0.5px)) 0 0 / 100% 100% no-repeat;
+  }
+  .divider { background: var(--line); }
+
+  /* the net between the two players */
+  .net {
+    position: relative;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255, 255, 255, 0.30) 0 2px,
+      transparent 2px 9px);
+  }
+  .net::before {              /* white net tape */
+    content: "";
+    position: absolute;
+    top: 0; left: -2px; right: -2px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.75);
+  }
+  .net::after {               /* shadow cast by the net */
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 3px; right: -3px;
+    background: linear-gradient(90deg, rgba(0,0,0,0.25), transparent);
+    z-index: -1;
+  }
+
+  .panel { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+
+  .name-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+  }
+  .serve-dot {
+    width: 20px; height: 20px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+  .serve-dot .ball { opacity: 0.12; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+  .serve-dot.on .ball {
+    opacity: 1;
+    transform: rotate(-12deg);
+  }
+  .panel[data-p="0"] .serve-dot.on .ball { color: var(--p1); }
+  .panel[data-p="1"] .serve-dot.on .ball { color: var(--p2); }
+
+  .name {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: clamp(1rem, 2.4vw, 1.35rem);
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.1rem;
+    text-overflow: ellipsis;
+  }
+  .name:hover { border-bottom-color: var(--line-strong); }
+  .name:focus { outline: none; border-bottom-color: currentColor; }
+
+  /* huge points numeral */
+  .points {
+    font-size: clamp(3rem, 11vw, 6rem);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    padding: 0.4rem 0;
+  }
+  .panel[data-p="0"] .points { color: var(--p1); }
+  .panel[data-p="1"] .points { color: var(--p2); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .points.pop { animation: pop var(--dur-fast) var(--ease-out); }
+    @keyframes pop {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    /* ball-drop bounce when a game is won */
+    .tally .value.bump { animation: bump 420ms var(--ease-out); }
+    @keyframes bump {
+      0%   { transform: translateY(0); }
+      35%  { transform: translateY(-7px); }
+      60%  { transform: translateY(1px); }
+      100% { transform: translateY(0); }
+    }
+  }
+
+  /* games & sets tally */
+  .tally {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .tally > div { padding: 0.55rem 0.9rem; background: var(--surface-2); }
+  .tally > div + div { border-left: 1px solid var(--line); }
+  .tally .label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .tally .value {
+    font-size: 1.5rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+
+  /* point button */
+  .point-btn {
+    min-height: 64px;
+    border: none;
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--bg);
+    cursor: pointer;
+    transition: transform 150ms ease-out, filter 150ms ease-out, opacity 150ms ease-out;
+  }
+  .panel[data-p="0"] .point-btn { background: var(--p1); }
+  .panel[data-p="1"] .point-btn { background: var(--p2); }
+  .point-btn:hover:not(:disabled) { filter: brightness(1.08); }
+  .point-btn:active:not(:disabled) { transform: scale(0.98); }
+  .point-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+  /* --- controls --- */
+  footer {
+    display: flex;
+    justify-content: center;
+    gap: 0.8rem;
+    padding: 1rem clamp(1rem, 4vw, 3rem) 1.6rem;
+    border-top: 1px solid var(--line);
+  }
+  .ctrl {
+    min-height: 48px;
+    padding: 0 1.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 150ms ease-out, border-color 150ms ease-out, opacity 150ms ease-out;
+  }
+  .ctrl:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text); }
+  .ctrl:disabled { opacity: 0.35; cursor: not-allowed; }
+  .ctrl.danger:hover:not(:disabled) { border-color: var(--p2); color: var(--p2); }
+
+  /* --- deuce badge + winner banner --- */
+  .deuce {
+    grid-column: 1 / -1;
+    justify-self: center;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--bg);
+    background: #FFD75E;
+    border-radius: 999px;
+    padding: 0.3rem 1.1rem;
+    visibility: hidden;
+  }
+  .deuce.show { visibility: visible; }
+
+  .banner {
+    grid-column: 1 / -1;
+    display: none;
+    text-align: center;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    padding: 1.2rem 1rem;
+    background: var(--surface);
+  }
+  .banner.show { display: block; }
+  .banner .title {
+    font-size: clamp(1.2rem, 3.5vw, 2rem);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .banner .sub { margin-top: 0.3rem; color: var(--muted); font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  :is(button, input):focus-visible {
+    outline: 2px solid #FFD75E;
+    outline-offset: 2px;
+  }
+
+  /* --- responsive: stack panels on narrow screens --- */
+  @media (max-width: 640px) {
+    main { grid-template-columns: 1fr; }
+    .divider { display: none; }
+    .panel + .panel { border-top: 1px solid var(--line); padding-top: 1.2rem; }
+    .point-btn { min-height: 56px; }
+  }
+</style>
+</head>
+<body data-page-node-id="412ao0KKltxR3laLEd9xqp">
+
+<header data-page-node-id="GdPX1bbUTLbGSG8IPbFCgl">
+  <div class="wordmark" data-page-node-id="vd4isEH27OEKaYljqzySJv"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="vertical-align: -1px; margin-right: 0.3rem;"><circle cx="12" cy="12" r="10" style="fill: var(--ball);"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" style="fill: none; stroke: var(--bg); stroke-width: 1.6;"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" style="fill: none; stroke: var(--bg); stroke-width: 1.6;"/></svg>Tennis<em data-page-node-id="OJwsV3WxbBQgGYRbm5W1Q1">Set</em></div>
+  <div class="status" id="status" aria-live="polite" data-page-node-id="80GQhPAjlycKG6TK6NsHSt">Best of 3</div>
+</header>
+
+<main data-page-node-id="H0H7LYUZe2lmDqFp3DDdNO">
+  <!-- Player 1 -->
+  <section class="panel" data-p="0" aria-label="Player 1" data-page-node-id="fidLDQbIdD38kYIveKw8Of">
+    <div class="name-row" data-page-node-id="KTFi1ZH1jO29OuY5ZSMXg8">
+      <span class="serve-dot" id="dot0" title="Serving" data-page-node-id="tXmPAWgRSrhTX6uqeUGy5S"><svg class="ball" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/></svg></span>
+      <input class="name" id="name0" maxlength="16" value="PLAYER ONE" aria-label="Player 1 name" data-page-node-id="D0lin4dnlmUEMBUupp8aNS" />
+    </div>
+    <div class="points" id="pts0" aria-live="polite" data-page-node-id="6waQc4IjcLEXm2CEIGm2Lq">0</div>
+    <div class="tally" data-page-node-id="wnnS9FCFLX6HFtwj3QAg0h">
+      <div data-page-node-id="BqGgzIDyVR0qOE95Dkg22G"><div class="label" data-page-node-id="FzdxD9qHF18RqY8yNVojxK">Sets</div><div class="value" id="sets0" data-page-node-id="6ucuL0FtUz92Nm0Tsnl1pB">0</div></div>
+      <div data-page-node-id="29qOrqbmSM1Ab7X6nD0AYa"><div class="label" data-page-node-id="Z7XKLH0KD6rpMbZIThNdRE">Games</div><div class="value" id="games0" data-page-node-id="L3CedSAMEkO7vYSwveK20A">0</div></div>
+    </div>
+    <button class="point-btn" id="btn0" data-page-node-id="02MkN0KpiegOAORmpCM6rg">Point</button>
+  </section>
+
+  <div class="divider net" aria-hidden="true" data-page-node-id="XUwUBhUxDq5u1yHG2uKGQG"></div>
+
+  <!-- Player 2 -->
+  <section class="panel" data-p="1" aria-label="Player 2" data-page-node-id="qnbASA4LjjvoXVWqMWbOfY">
+    <div class="name-row" data-page-node-id="1gOBUGSTvSridYP0Jxo7kB">
+      <span class="serve-dot" id="dot1" title="Serving" data-page-node-id="O7O1bG4WkMYG5vBA9p9LZy"><svg class="ball" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/></svg></span>
+      <input class="name" id="name1" maxlength="16" value="PLAYER TWO" aria-label="Player 2 name" data-page-node-id="cuVVGtkifW3lMmvKKnvHS5" />
+    </div>
+    <div class="points" id="pts1" aria-live="polite" data-page-node-id="7gqwWPg5mMXH3oHjU2rPI1">0</div>
+    <div class="tally" data-page-node-id="5sGzZk1pvUm0f4mwHkx3Xm">
+      <div data-page-node-id="OUdyKa1QG8EEHET2hE5nVP"><div class="label" data-page-node-id="ZHfji0vJ3xEFNc8dzako4v">Sets</div><div class="value" id="sets1" data-page-node-id="KjGI5EUYNnbYBMZn6l190o">0</div></div>
+      <div data-page-node-id="IX0exQVCW0XRso5fTKYwNR"><div class="label" data-page-node-id="944A23fOcPKr72FTP77X41">Games</div><div class="value" id="games1" data-page-node-id="z0DNCuxpzEsTFTejoz9XHr">0</div></div>
+    </div>
+    <button class="point-btn" id="btn1" data-page-node-id="EiOIDxLY0XJDtN4aBq1YIa">Point</button>
+  </section>
+
+  <div class="deuce" id="deuce" data-page-node-id="4yTCPH4gKecUqcBsAvFmUW">Deuce</div>
+  <div class="banner" id="banner" data-page-node-id="TVr62o88Keersns7OK5ccG">
+    <div class="title" id="bannerTitle" data-page-node-id="QcWqwwsvxOtYtqQxUGjs7R"></div>
+    <div class="sub" data-page-node-id="JW8FBrW9ba5usiOe9Yidmg">Press Undo to rewind, or New Match to start over</div>
+  </div>
+</main>
+
+<footer data-page-node-id="GW2ggdChnlc5KguscninNU">
+  <button class="ctrl" id="undoBtn" data-page-node-id="SZYOzNwjBhUw7nETOhHOjy">Undo</button>
+  <button class="ctrl danger" id="newBtn" data-page-node-id="MpgbnoHQUFN5EguOx2YWCi">New Match</button>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "tennisSet.v1";
+  var POINT_LABELS = ["0", "15", "30", "40"];
+
+  // ------- state -------
+  function freshState(keepNames) {
+    return {
+      names: keepNames ? keepNames.slice() : ["PLAYER ONE", "PLAYER TWO"],
+      points: [0, 0],   // 0..3  →  0/15/30/40
+      adv: null,        // null | 0 | 1  (advantage player)
+      games: [0, 0],    // games in current set
+      sets: [0, 0],     // sets won (best of 3 → first to 2)
+      server: 0,        // 0 or 1, alternates each game
+      matchOver: false,
+      winner: null,
+      history: []       // snapshots taken before every point
+    };
+  }
+
+  var state = load() || freshState();
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      var s = JSON.parse(raw);
+      // basic shape guard so a corrupt save never breaks the app
+      if (s && Array.isArray(s.points) && Array.isArray(s.games) && Array.isArray(s.sets)) return s;
+      return null;
+    } catch (e) { return null; }
+  }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable — keep playing in memory */ }
+  }
+
+  function snapshot() {
+    state.history.push(JSON.stringify({
+      points: state.points, adv: state.adv, games: state.games,
+      sets: state.sets, server: state.server, matchOver: state.matchOver, winner: state.winner
+    }));
+    if (state.history.length > 400) state.history.shift();
+  }
+
+  // ------- scoring -------
+  function awardPoint(i) {
+    if (state.matchOver) return;
+    snapshot();
+
+    var o = 1 - i;
+    var gameWon = false;
+
+    if (state.adv === i) {
+      gameWon = true;                            // AD held → game
+    } else if (state.adv === o) {
+      state.adv = null;                          // AD lost → back to deuce
+    } else if (state.points[i] === 3) {
+      if (state.points[o] === 3) state.adv = i;  // 40-40 deuce → advantage
+      else gameWon = true;                       // 40 vs ≤30 → game
+    } else {
+      state.points[i] += 1;
+    }
+
+    if (gameWon) winGame(i);
+    save();
+    render(i, gameWon ? i : null);
+  }
+
+  function winGame(i) {
+    var o = 1 - i;
+    state.points = [0, 0];
+    state.adv = null;
+    state.games[i] += 1;
+    state.server = 1 - state.server;   // serve alternates every game
+
+    // set: first to 6 games with a 2-game lead. Covers 6-4 and 7-5;
+    // from 6-6 it plays out to 8-6, 9-7, ... which is exactly
+    // "first to 7 with a 2-game lead" expressed as lead ≥ 2.
+    if (state.games[i] >= 6 && state.games[i] - state.games[o] >= 2) {
+      state.sets[i] += 1;
+      state.games = [0, 0];
+      if (state.sets[i] >= 2) {        // best of 3
+        state.matchOver = true;
+        state.winner = i;
+      }
+    }
+  }
+
+  function undo() {
+    if (!state.history.length) return;
+    var prev = JSON.parse(state.history.pop());
+    state.points = prev.points;
+    state.adv = prev.adv;
+    state.games = prev.games;
+    state.sets = prev.sets;
+    state.server = prev.server;
+    state.matchOver = prev.matchOver;
+    state.winner = prev.winner;
+    save();
+    render();
+  }
+
+  function newMatch() {
+    if (!window.confirm("Start a new match? Current scores will be cleared.")) return;
+    state = freshState(state.names);   // keep names, wipe scores
+    save();
+    render();
+  }
+
+  // ------- render -------
+  function el(id) { return document.getElementById(id); }
+  var els = {
+    pts: [el("pts0"), el("pts1")],
+    games: [el("games0"), el("games1")],
+    sets: [el("sets0"), el("sets1")],
+    dots: [el("dot0"), el("dot1")],
+    names: [el("name0"), el("name1")],
+    btns: [el("btn0"), el("btn1")],
+    status: el("status"),
+    deuce: el("deuce"),
+    banner: el("banner"),
+    bannerTitle: el("bannerTitle"),
+    undo: el("undoBtn")
+  };
+
+  function pointLabel(i) {
+    if (state.adv === i) return "AD";
+    return POINT_LABELS[state.points[i]];
+  }
+
+  function render(popIndex, bumpIndex) {
+    var i;
+    for (i = 0; i < 2; i++) {
+      els.pts[i].textContent = pointLabel(i);
+      els.games[i].textContent = state.games[i];
+      els.sets[i].textContent = state.sets[i];
+      els.dots[i].classList.toggle("on", !state.matchOver && state.server === i);
+      if (document.activeElement !== els.names[i]) els.names[i].value = state.names[i];
+      els.btns[i].disabled = state.matchOver;
+    }
+
+    // deuce badge: both at 40, no advantage
+    var isDeuce = !state.matchOver && state.adv === null &&
+                  state.points[0] === 3 && state.points[1] === 3;
+    els.deuce.classList.toggle("show", isDeuce);
+
+    // status line / winner banner
+    if (state.matchOver) {
+      els.status.textContent = "Match complete";
+      els.bannerTitle.textContent = state.names[state.winner] + " wins the match";
+      els.bannerTitle.style.color = state.winner === 0 ? "var(--p1)" : "var(--p2)";
+      els.banner.classList.add("show");
+    } else {
+      var setNo = Math.min(state.sets[0] + state.sets[1] + 1, 3);
+      var gameNo = state.games[0] + state.games[1] + 1;
+      els.status.textContent = "Set " + setNo + " \u00B7 Game " + gameNo;
+      els.banner.classList.remove("show");
+    }
+
+    els.undo.disabled = state.history.length === 0;
+
+    // pop animation on the player who just scored
+    if (popIndex !== undefined && popIndex !== null) {
+      var node = els.pts[popIndex];
+      node.classList.remove("pop");
+      void node.offsetWidth; // restart animation if already running
+      node.classList.add("pop");
+      node.addEventListener("animationend", function h() {
+        node.classList.remove("pop");
+        node.removeEventListener("animationend", h);
+      });
+    }
+
+    // ball-drop bounce on the games tally when a game is won
+    if (bumpIndex !== undefined && bumpIndex !== null) {
+      var tally = els.games[bumpIndex];
+      tally.classList.remove("bump");
+      void tally.offsetWidth;
+      tally.classList.add("bump");
+      tally.addEventListener("animationend", function h2() {
+        tally.classList.remove("bump");
+        tally.removeEventListener("animationend", h2);
+      });
+    }
+  }
+
+  // ------- wiring -------
+  els.btns[0].addEventListener("click", function () { awardPoint(0); });
+  els.btns[1].addEventListener("click", function () { awardPoint(1); });
+  els.undo.addEventListener("click", undo);
+  el("newBtn").addEventListener("click", newMatch);
+
+  els.names.forEach(function (input, i) {
+    input.addEventListener("input", function () {
+      state.names[i] = input.value;
+      save();
+      if (state.matchOver) els.bannerTitle.textContent = state.names[state.winner] + " wins the match";
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
