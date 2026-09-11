@@ -1,32 +1,39 @@
 <!DOCTYPE html>
-<html lang="en" data-page-node-id="vj88jS4MJ69eKr1FGnVJW0">
-<head data-page-node-id="dHsa4jL6tkYI85Ms8nNshv">
-<meta charset="UTF-8" data-page-node-id="8YnB7Dm5BPAxuMmuQ1I7uS" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="8eaMLluHXpP0pHx1sJQn0h" />
+<html lang="en" data-page-node-id="NMQQvMdZraNYFHiF41m7Ku">
+<head data-page-node-id="g8CWecLHaSKrEFJ1XlH3QM">
+<meta charset="UTF-8" data-page-node-id="2nXPKjIDqsOrTn1QroWBoG" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="gOJvQp7SbA7c8xLPBkSirE" />
 <title>TennisSet — Offline Scoreboard</title>
 <style>
   /* ============================================================
      TENNISSET — broadcast-style offline scoreboard
-     Direction: industrial broadcast. Dark navy court, one mint
-     player vs one coral player, huge tabular numerals, hairline
-     court geometry. No network, no fonts loaded — type is built
-     from system weights (900, uppercase, tight tracking).
+     Styled with the `tennis-board-design` skill:
+       · two horizontal player rows, stacked
+       · name left · sets + games as middle columns · points right
+       · navy #0B1220, mint #00E0A4 vs coral #FF5C7A, white text
+       · system type, huge numerals (clamp 3-6rem), sets/games muted
+       · server dot glows in the serving player's accent
+       · one animation only: the 200ms point pop
+     Kept inline rather than in styles.css so the app stays a
+     single file that runs offline by double-click.
      ============================================================ */
   :root {
     --bg: #0B1220;
     --surface: #101A2E;
-    --surface-2: #0E1626;
+    --surface-2: #0D1626;
     --line: rgba(255, 255, 255, 0.10);
     --line-strong: rgba(255, 255, 255, 0.22);
     --text: #F2F5FA;
     --muted: #8A94A8;
     --p1: #00E0A4;
     --p2: #FF5C7A;
-    --ball: #DFF24B;            /* tennis-ball felt yellow */
+    --ball: #DFF24B;
     --radius: 14px;
     --dur-fast: 200ms;
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    /* shared board columns: dot · name · sets · games · points · action */
+    --cols: 26px minmax(0, 1fr) 78px 78px minmax(112px, 150px) 116px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -43,7 +50,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* --- atmosphere: court glows + hairline court geometry --- */
+  /* --- atmosphere: faint court geometry + player accent glows --- */
   body::before {
     content: "";
     position: fixed;
@@ -51,10 +58,10 @@
     pointer-events: none;
     z-index: 0;
     background:
-      radial-gradient(46rem 30rem at 8% -8%, rgba(0, 224, 164, 0.09), transparent 60%),
-      radial-gradient(46rem 30rem at 96% 108%, rgba(255, 92, 122, 0.09), transparent 60%),
-      linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 100% 25% no-repeat,
-      linear-gradient(90deg, transparent calc(50% - 0.5px), var(--line) calc(50% - 0.5px), var(--line) calc(50% + 0.5px), transparent calc(50% + 0.5px)) no-repeat;
+      radial-gradient(44rem 28rem at 10% -10%, rgba(0, 224, 164, 0.08), transparent 62%),
+      radial-gradient(44rem 28rem at 92% 110%, rgba(255, 92, 122, 0.08), transparent 62%),
+      linear-gradient(90deg, transparent calc(50% - 0.5px), var(--line) calc(50% - 0.5px), var(--line) calc(50% + 0.5px), transparent calc(50% + 0.5px)) 0 14% / 100% 72% no-repeat,
+      linear-gradient(var(--line) 1px, transparent 1px) 0 14% / 100% 72% no-repeat;
   }
   body::after {
     content: "";
@@ -62,29 +69,32 @@
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    background: radial-gradient(circle at 50% 50%, transparent 42%, rgba(0, 0, 0, 0.35) 100%);
+    background: radial-gradient(circle at 50% 45%, transparent 45%, rgba(0, 0, 0, 0.4) 100%);
   }
 
   header, main, footer { position: relative; z-index: 1; }
 
-  /* --- header / wordmark --- */
+  /* --- header --- */
   header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1.25rem clamp(1rem, 4vw, 3rem);
+    padding: 1.1rem clamp(1rem, 4vw, 3rem);
     border-bottom: 1px solid var(--line);
   }
   .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
     font-weight: 900;
-    font-size: 1.15rem;
-    letter-spacing: 0.28em;
+    font-size: 1.1rem;
+    letter-spacing: 0.26em;
     text-transform: uppercase;
   }
   .wordmark em { font-style: normal; color: var(--muted); }
   .status {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -92,119 +102,103 @@
     text-align: right;
   }
 
-  /* --- scoreboard --- */
+  /* --- the board --- */
   main {
     flex: 1;
-    display: grid;
-    grid-template-columns: 1fr 3px 1fr;
-    align-content: start;
-    position: relative;
-    max-width: 68rem;
     width: 100%;
+    max-width: 58rem;
     margin: 0 auto;
-    padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 3rem);
-    gap: 0.9rem clamp(1rem, 3vw, 2.5rem);
-  }
-  /* faint court geometry behind the scoreboard */
-  main::before {
-    content: "";
-    position: absolute;
-    inset: clamp(0.5rem, 2vw, 1.5rem) clamp(-0.5rem, 1vw, 0rem);
-    pointer-events: none;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-left: none;
-    border-right: none;
-  }
-  main::after {
-    content: "";
-    position: absolute;
-    top: clamp(0.5rem, 2vw, 1.5rem);
-    bottom: clamp(0.5rem, 2vw, 1.5rem);
-    left: 6%;
-    right: 6%;
-    pointer-events: none;
-    background: linear-gradient(90deg, transparent calc(24% - 0.5px), rgba(255,255,255,0.05) calc(24% - 0.5px), rgba(255,255,255,0.05) calc(24% + 0.5px), transparent calc(24% + 0.5px)) 0 0 / 100% 100% no-repeat,
-                linear-gradient(90deg, transparent calc(76% - 0.5px), rgba(255,255,255,0.05) calc(76% - 0.5px), rgba(255,255,255,0.05) calc(76% + 0.5px), transparent calc(76% + 0.5px)) 0 0 / 100% 100% no-repeat;
-  }
-  .divider { background: var(--line); }
-
-  /* the net between the two players */
-  .net {
-    position: relative;
-    background: repeating-linear-gradient(to bottom,
-      rgba(255, 255, 255, 0.30) 0 2px,
-      transparent 2px 9px);
-  }
-  .net::before {              /* white net tape */
-    content: "";
-    position: absolute;
-    top: 0; left: -2px; right: -2px;
-    height: 4px;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.75);
-  }
-  .net::after {               /* shadow cast by the net */
-    content: "";
-    position: absolute;
-    top: 0; bottom: 0;
-    left: 3px; right: -3px;
-    background: linear-gradient(90deg, rgba(0,0,0,0.25), transparent);
-    z-index: -1;
-  }
-
-  .panel { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
-
-  .name-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    min-height: 44px;
-  }
-  .serve-dot {
-    width: 20px; height: 20px;
+    padding: clamp(1.1rem, 3vw, 2.4rem) clamp(1rem, 4vw, 3rem);
     display: grid;
-    place-items: center;
-    flex: 0 0 auto;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 0.55rem;
   }
-  .serve-dot .ball { opacity: 0.12; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
-  .serve-dot.on .ball {
-    opacity: 1;
-    transform: rotate(-12deg);
-  }
-  .panel[data-p="0"] .serve-dot.on .ball { color: var(--p1); }
-  .panel[data-p="1"] .serve-dot.on .ball { color: var(--p2); }
 
+  /* column labels, aligned to the same grid as the player rows */
+  .board-head {
+    display: grid;
+    grid-template-columns: var(--cols);
+    align-items: end;
+    gap: 0.5rem;
+    padding: 0 0.9rem 0.1rem;
+  }
+  .board-head .h {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+  }
+  .board-head .h.first { text-align: left; }
+
+  /* player row */
+  .row {
+    display: grid;
+    grid-template-columns: var(--cols);
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background-color: var(--surface-2);
+    transition: border-color var(--dur-fast) var(--ease-out);
+  }
+  .row[data-p="0"] { background-image: linear-gradient(90deg, rgba(0, 224, 164, 0.07), transparent 34%); }
+  .row[data-p="1"] { background-image: linear-gradient(90deg, rgba(255, 92, 122, 0.07), transparent 34%); }
+  .row:hover { border-color: var(--line-strong); }
+
+  /* serving ball */
+  .serve-dot { display: grid; place-items: center; }
+  .serve-dot .ball {
+    opacity: 0.12;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .row[data-p="0"] .serve-dot.on .ball { color: var(--p1); opacity: 1; filter: drop-shadow(0 0 6px rgba(0, 224, 164, 0.75)); }
+  .row[data-p="1"] .serve-dot.on .ball { color: var(--p2); opacity: 1; filter: drop-shadow(0 0 6px rgba(255, 92, 122, 0.75)); }
+
+  /* name */
   .name {
-    flex: 1;
     min-width: 0;
     background: transparent;
     border: none;
     border-bottom: 1px dashed transparent;
     color: var(--text);
     font-family: inherit;
-    font-size: clamp(1rem, 2.4vw, 1.35rem);
+    font-size: clamp(0.95rem, 2vw, 1.25rem);
     font-weight: 900;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    padding: 0.35rem 0.1rem;
+    padding: 0.3rem 0.1rem;
     text-overflow: ellipsis;
   }
   .name:hover { border-bottom-color: var(--line-strong); }
   .name:focus { outline: none; border-bottom-color: currentColor; }
 
-  /* huge points numeral */
-  .points {
-    font-size: clamp(3rem, 11vw, 6rem);
+  /* sets + games: middle columns, muted gray */
+  .stat { text-align: center; }
+  .stat .value {
+    font-size: 1.45rem;
     font-weight: 900;
-    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    line-height: 1.1;
+  }
+
+  /* points: huge accent numeral */
+  .points {
+    font-size: clamp(3rem, 9vw, 6rem);
+    font-weight: 900;
+    line-height: 0.95;
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
     text-align: center;
-    padding: 0.4rem 0;
   }
-  .panel[data-p="0"] .points { color: var(--p1); }
-  .panel[data-p="1"] .points { color: var(--p2); }
+  .row[data-p="0"] .points { color: var(--p1); }
+  .row[data-p="1"] .points { color: var(--p2); }
 
+  /* the board's one animation: point pop */
   @media (prefers-reduced-motion: no-preference) {
     .points.pop { animation: pop var(--dur-fast) var(--ease-out); }
     @keyframes pop {
@@ -212,59 +206,75 @@
       45% { transform: scale(1.15); }
       100% { transform: scale(1); }
     }
-    /* ball-drop bounce when a game is won */
-    .tally .value.bump { animation: bump 420ms var(--ease-out); }
-    @keyframes bump {
-      0%   { transform: translateY(0); }
-      35%  { transform: translateY(-7px); }
-      60%  { transform: translateY(1px); }
-      100% { transform: translateY(0); }
-    }
   }
 
-  /* games & sets tally */
-  .tally {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-  .tally > div { padding: 0.55rem 0.9rem; background: var(--surface-2); }
-  .tally > div + div { border-left: 1px solid var(--line); }
-  .tally .label {
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .tally .value {
-    font-size: 1.5rem;
-    font-weight: 900;
-    font-variant-numeric: tabular-nums;
-    color: var(--muted);
-  }
-
-  /* point button */
+  /* point action: full-height accent strip at the row's right edge */
   .point-btn {
-    min-height: 64px;
+    align-self: stretch;
+    min-height: 58px;
     border: none;
-    border-radius: var(--radius);
+    border-radius: 10px;
     font-family: inherit;
-    font-size: 1rem;
+    font-size: 0.8rem;
     font-weight: 900;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--bg);
     cursor: pointer;
-    transition: transform 150ms ease-out, filter 150ms ease-out, opacity 150ms ease-out;
+    transition: filter 150ms ease-out, transform 150ms ease-out, opacity 150ms ease-out;
   }
-  .panel[data-p="0"] .point-btn { background: var(--p1); }
-  .panel[data-p="1"] .point-btn { background: var(--p2); }
+  .row[data-p="0"] .point-btn { background: var(--p1); }
+  .row[data-p="1"] .point-btn { background: var(--p2); }
   .point-btn:hover:not(:disabled) { filter: brightness(1.08); }
   .point-btn:active:not(:disabled) { transform: scale(0.98); }
   .point-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+  /* --- the net stretched across the court between the two rows --- */
+  .net-h {
+    height: 7px;
+    margin: 0.15rem 0.3rem;
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.7) 0 2px, transparent 2px) 0 0 / 100% 2px no-repeat,
+      repeating-linear-gradient(to right, rgba(255, 255, 255, 0.20) 0 2px, transparent 2px 10px);
+  }
+
+  /* --- deuce badge + winner banner --- */
+  .deuce {
+    justify-self: center;
+    font-size: 0.7rem;
+    font-weight: 900;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--bg);
+    background: var(--ball);
+    border-radius: 999px;
+    padding: 0.3rem 1.1rem;
+    visibility: hidden;
+  }
+  .deuce.show { visibility: visible; }
+
+  .banner {
+    display: none;
+    text-align: center;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    padding: 1.1rem 1rem;
+    background: var(--surface);
+  }
+  .banner.show { display: block; }
+  .banner .title {
+    font-size: clamp(1.1rem, 3.5vw, 1.9rem);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .banner .sub {
+    margin-top: 0.3rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
 
   /* --- controls --- */
   footer {
@@ -293,102 +303,81 @@
   .ctrl:disabled { opacity: 0.35; cursor: not-allowed; }
   .ctrl.danger:hover:not(:disabled) { border-color: var(--p2); color: var(--p2); }
 
-  /* --- deuce badge + winner banner --- */
-  .deuce {
-    grid-column: 1 / -1;
-    justify-self: center;
-    font-size: 0.72rem;
-    font-weight: 900;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--bg);
-    background: #FFD75E;
-    border-radius: 999px;
-    padding: 0.3rem 1.1rem;
-    visibility: hidden;
-  }
-  .deuce.show { visibility: visible; }
-
-  .banner {
-    grid-column: 1 / -1;
-    display: none;
-    text-align: center;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius);
-    padding: 1.2rem 1rem;
-    background: var(--surface);
-  }
-  .banner.show { display: block; }
-  .banner .title {
-    font-size: clamp(1.2rem, 3.5vw, 2rem);
-    font-weight: 900;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .banner .sub { margin-top: 0.3rem; color: var(--muted); font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; }
-
   :is(button, input):focus-visible {
-    outline: 2px solid #FFD75E;
+    outline: 2px solid var(--ball);
     outline-offset: 2px;
   }
 
-  /* --- responsive: stack panels on narrow screens --- */
+  /* --- responsive: tighten the columns, keep the row layout intact --- */
   @media (max-width: 640px) {
-    main { grid-template-columns: 1fr; }
-    .divider { display: none; }
-    .panel + .panel { border-top: 1px solid var(--line); padding-top: 1.2rem; }
-    .point-btn { min-height: 56px; }
+    :root { --cols: 20px minmax(0, 1fr) 46px 46px minmax(74px, 1fr) 74px; }
+    main { padding-inline: 0.85rem; }
+    .row { padding: 0.4rem 0.6rem; gap: 0.35rem; }
+    .board-head { padding-inline: 0.6rem; }
+    .points { font-size: clamp(2rem, 12vw, 3.2rem); }
+    .stat .value { font-size: 1.1rem; }
+    .point-btn { min-height: 50px; border-radius: 8px; font-size: 0.65rem; letter-spacing: 0.1em; }
   }
 </style>
 </head>
-<body data-page-node-id="412ao0KKltxR3laLEd9xqp">
+<body data-page-node-id="GiLBbmkmFBJAjNXqxgxvW6">
 
-<header data-page-node-id="GdPX1bbUTLbGSG8IPbFCgl">
-  <div class="wordmark" data-page-node-id="vd4isEH27OEKaYljqzySJv"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="vertical-align: -1px; margin-right: 0.3rem;"><circle cx="12" cy="12" r="10" style="fill: var(--ball);"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" style="fill: none; stroke: var(--bg); stroke-width: 1.6;"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" style="fill: none; stroke: var(--bg); stroke-width: 1.6;"/></svg>Tennis<em data-page-node-id="OJwsV3WxbBQgGYRbm5W1Q1">Set</em></div>
-  <div class="status" id="status" aria-live="polite" data-page-node-id="80GQhPAjlycKG6TK6NsHSt">Best of 3</div>
+<header data-page-node-id="Ji5mgaO2Sae11yeqF6cyub">
+  <div class="wordmark" data-page-node-id="WOTcqJCZ9YJChhjn2of3sp">
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" data-page-node-id="Ink8aGWRDkOx2cVsnfSY9L"><circle cx="12" cy="12" r="10" style="fill: var(--ball);" data-page-node-id="jmtkCt05EcQzTR8g22aP1D"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" style="fill: none; stroke: var(--bg); stroke-width: 1.6;" data-page-node-id="vWk84MYiODg2HvQpQB3RxI"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" style="fill: none; stroke: var(--bg); stroke-width: 1.6;" data-page-node-id="ynzglezLvqsH67oLVOLIf7"/></svg>
+    Tennis<em data-page-node-id="4rDXYIrO8edDpJ6cdDtmUW">Set</em>
+  </div>
+  <div class="status" id="status" aria-live="polite" data-page-node-id="G5QXCPcMLbPxdeNF3YnGo4">Best of 3</div>
 </header>
 
-<main data-page-node-id="H0H7LYUZe2lmDqFp3DDdNO">
+<main data-page-node-id="HUKCEKhpSHy8XUcA67Kftm">
+  <!-- column labels, aligned to the same grid as the rows below -->
+  <div class="board-head" aria-hidden="true" data-page-node-id="dqOmerHU7jqeUDU0usHYZC">
+    <span data-page-node-id="ksVDcU35tL6W9sR8YKYrx1"></span>
+    <span class="h first" data-page-node-id="hs3kXmGz3P6k6Sp7zJ7byI">Player</span>
+    <span class="h" data-page-node-id="OiDPP5JC3OmbHwCiHNH73y">Sets</span>
+    <span class="h" data-page-node-id="JFr6tZ7aKgbbWZFhdw3Ikb">Games</span>
+    <span class="h" data-page-node-id="IfawQvGvq8WRU7db80I6N0">Points</span>
+    <span data-page-node-id="oWiuDqgW0N8a9evaKkTVBu"></span>
+  </div>
+
   <!-- Player 1 -->
-  <section class="panel" data-p="0" aria-label="Player 1" data-page-node-id="fidLDQbIdD38kYIveKw8Of">
-    <div class="name-row" data-page-node-id="KTFi1ZH1jO29OuY5ZSMXg8">
-      <span class="serve-dot" id="dot0" title="Serving" data-page-node-id="tXmPAWgRSrhTX6uqeUGy5S"><svg class="ball" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/></svg></span>
-      <input class="name" id="name0" maxlength="16" value="PLAYER ONE" aria-label="Player 1 name" data-page-node-id="D0lin4dnlmUEMBUupp8aNS" />
-    </div>
-    <div class="points" id="pts0" aria-live="polite" data-page-node-id="6waQc4IjcLEXm2CEIGm2Lq">0</div>
-    <div class="tally" data-page-node-id="wnnS9FCFLX6HFtwj3QAg0h">
-      <div data-page-node-id="BqGgzIDyVR0qOE95Dkg22G"><div class="label" data-page-node-id="FzdxD9qHF18RqY8yNVojxK">Sets</div><div class="value" id="sets0" data-page-node-id="6ucuL0FtUz92Nm0Tsnl1pB">0</div></div>
-      <div data-page-node-id="29qOrqbmSM1Ab7X6nD0AYa"><div class="label" data-page-node-id="Z7XKLH0KD6rpMbZIThNdRE">Games</div><div class="value" id="games0" data-page-node-id="L3CedSAMEkO7vYSwveK20A">0</div></div>
-    </div>
-    <button class="point-btn" id="btn0" data-page-node-id="02MkN0KpiegOAORmpCM6rg">Point</button>
+  <section class="row" data-p="0" aria-label="Player 1" data-page-node-id="sEANmF5aVJbe66b8aggrWM">
+    <span class="serve-dot" id="dot0" title="Serving" data-page-node-id="e6GPzCfGP6oVN5u2UlQA4e">
+      <svg class="ball" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" data-page-node-id="jG03ltToDRf4tR3spie566"><circle cx="12" cy="12" r="10" fill="currentColor" data-page-node-id="P5szpccczlPEoAtwvBMWU3"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7" data-page-node-id="dlJIUADIpOhekjSWBu6BdY"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7" data-page-node-id="USa4Qzsqmdp8FkY9tXnf1X"/></svg>
+    </span>
+    <input class="name" id="name0" maxlength="16" value="PLAYER ONE" aria-label="Player 1 name" data-page-node-id="vdpTHXkFQDNlk4YAzQ7HIj" />
+    <div class="stat" data-page-node-id="btxfPxCXLwFwElaIaJmyBn"><div class="value" id="sets0" data-page-node-id="yYDGowwxs2jNV6LqCRxGG0">0</div></div>
+    <div class="stat" data-page-node-id="q4BOv2UA0D84HmtVvgPHzd"><div class="value" id="games0" data-page-node-id="KCRBRsZTOv37GgB1UQMifH">0</div></div>
+    <div class="points" id="pts0" aria-live="polite" data-page-node-id="WZEZ5KafGmaIbWHmKFcDRo">0</div>
+    <button class="point-btn" id="btn0" data-page-node-id="fHIakkhYbfFVdkF3gpoKY2">Point</button>
   </section>
 
-  <div class="divider net" aria-hidden="true" data-page-node-id="XUwUBhUxDq5u1yHG2uKGQG"></div>
+  <div class="net-h" aria-hidden="true" data-page-node-id="53wMTiDAfxD6uSMtzg9wBI"></div>
 
   <!-- Player 2 -->
-  <section class="panel" data-p="1" aria-label="Player 2" data-page-node-id="qnbASA4LjjvoXVWqMWbOfY">
-    <div class="name-row" data-page-node-id="1gOBUGSTvSridYP0Jxo7kB">
-      <span class="serve-dot" id="dot1" title="Serving" data-page-node-id="O7O1bG4WkMYG5vBA9p9LZy"><svg class="ball" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7"/></svg></span>
-      <input class="name" id="name1" maxlength="16" value="PLAYER TWO" aria-label="Player 2 name" data-page-node-id="cuVVGtkifW3lMmvKKnvHS5" />
-    </div>
-    <div class="points" id="pts1" aria-live="polite" data-page-node-id="7gqwWPg5mMXH3oHjU2rPI1">0</div>
-    <div class="tally" data-page-node-id="5sGzZk1pvUm0f4mwHkx3Xm">
-      <div data-page-node-id="OUdyKa1QG8EEHET2hE5nVP"><div class="label" data-page-node-id="ZHfji0vJ3xEFNc8dzako4v">Sets</div><div class="value" id="sets1" data-page-node-id="KjGI5EUYNnbYBMZn6l190o">0</div></div>
-      <div data-page-node-id="IX0exQVCW0XRso5fTKYwNR"><div class="label" data-page-node-id="944A23fOcPKr72FTP77X41">Games</div><div class="value" id="games1" data-page-node-id="z0DNCuxpzEsTFTejoz9XHr">0</div></div>
-    </div>
-    <button class="point-btn" id="btn1" data-page-node-id="EiOIDxLY0XJDtN4aBq1YIa">Point</button>
+  <section class="row" data-p="1" aria-label="Player 2" data-page-node-id="qVSzAww2TGlQtotMf2ftjW">
+    <span class="serve-dot" id="dot1" title="Serving" data-page-node-id="DUExAFfYyQHCKSAtcImVSW">
+      <svg class="ball" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" data-page-node-id="konWdg1K1OrlYaF1EBubaM"><circle cx="12" cy="12" r="10" fill="currentColor" data-page-node-id="CbPGwuVujWL7IWYxUWKIMD"/><path d="M3.5 5.5 C 8 9, 8 15, 3.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7" data-page-node-id="HWdu5yGOPmPGwWxdznlPDG"/><path d="M20.5 5.5 C 16 9, 16 15, 20.5 18.5" fill="none" stroke="#0B1220" stroke-width="1.7" data-page-node-id="Ditigv58SSIs0OIgkiHxfe"/></svg>
+    </span>
+    <input class="name" id="name1" maxlength="16" value="PLAYER TWO" aria-label="Player 2 name" data-page-node-id="lK5FVLz61AYxCSQatM8avh" />
+    <div class="stat" data-page-node-id="TZerjTSkjvqPyJtBpKjQqI"><div class="value" id="sets1" data-page-node-id="B2wZivjkOnfOy7rk1YaZCI">0</div></div>
+    <div class="stat" data-page-node-id="I7HuW9zFxwZaYq2lKUzl2h"><div class="value" id="games1" data-page-node-id="vDIkYYiiQigcbfmkitXdNu">0</div></div>
+    <div class="points" id="pts1" aria-live="polite" data-page-node-id="6UEMLJUt1uhCYIHpilBWgb">0</div>
+    <button class="point-btn" id="btn1" data-page-node-id="cBabV1eHEHHOHpWbwqYyQd">Point</button>
   </section>
 
-  <div class="deuce" id="deuce" data-page-node-id="4yTCPH4gKecUqcBsAvFmUW">Deuce</div>
-  <div class="banner" id="banner" data-page-node-id="TVr62o88Keersns7OK5ccG">
-    <div class="title" id="bannerTitle" data-page-node-id="QcWqwwsvxOtYtqQxUGjs7R"></div>
-    <div class="sub" data-page-node-id="JW8FBrW9ba5usiOe9Yidmg">Press Undo to rewind, or New Match to start over</div>
+  <div class="deuce" id="deuce" data-page-node-id="15TzqxpNouBA4zn6JwFoIg">Deuce</div>
+
+  <div class="banner" id="banner" data-page-node-id="Ijug3dZRnLIy3R5IxgXXql">
+    <div class="title" id="bannerTitle" data-page-node-id="DiKI6r5IsQH2JhzMgH1Rr5"></div>
+    <div class="sub" data-page-node-id="OWTD3Z2AAwfEcKUdDNTwDQ">Press Undo to rewind, or New Match to start over</div>
   </div>
 </main>
 
-<footer data-page-node-id="GW2ggdChnlc5KguscninNU">
-  <button class="ctrl" id="undoBtn" data-page-node-id="SZYOzNwjBhUw7nETOhHOjy">Undo</button>
-  <button class="ctrl danger" id="newBtn" data-page-node-id="MpgbnoHQUFN5EguOx2YWCi">New Match</button>
+<footer data-page-node-id="B0jAUHNqBiAnyZqySkRm8N">
+  <button class="ctrl" id="undoBtn" data-page-node-id="0CBroy1aQ8QFVwQkQtpasf">Undo</button>
+  <button class="ctrl danger" id="newBtn" data-page-node-id="3cIbTLX8fqXHLchgzbJPkZ">New Match</button>
 </footer>
 
 <script>
@@ -459,7 +448,7 @@
 
     if (gameWon) winGame(i);
     save();
-    render(i, gameWon ? i : null);
+    render(i);
   }
 
   function winGame(i) {
@@ -524,7 +513,7 @@
     return POINT_LABELS[state.points[i]];
   }
 
-  function render(popIndex, bumpIndex) {
+  function render(popIndex) {
     var i;
     for (i = 0; i < 2; i++) {
       els.pts[i].textContent = pointLabel(i);
@@ -555,27 +544,15 @@
 
     els.undo.disabled = state.history.length === 0;
 
-    // pop animation on the player who just scored
+    // the board's single animation: pop the numeral that just scored
     if (popIndex !== undefined && popIndex !== null) {
       var node = els.pts[popIndex];
       node.classList.remove("pop");
-      void node.offsetWidth; // restart animation if already running
+      void node.offsetWidth; // restart the animation if it is already running
       node.classList.add("pop");
       node.addEventListener("animationend", function h() {
         node.classList.remove("pop");
         node.removeEventListener("animationend", h);
-      });
-    }
-
-    // ball-drop bounce on the games tally when a game is won
-    if (bumpIndex !== undefined && bumpIndex !== null) {
-      var tally = els.games[bumpIndex];
-      tally.classList.remove("bump");
-      void tally.offsetWidth;
-      tally.classList.add("bump");
-      tally.addEventListener("animationend", function h2() {
-        tally.classList.remove("bump");
-        tally.removeEventListener("animationend", h2);
       });
     }
   }
