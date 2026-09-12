@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "weather": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@dangahagan/weather-mcp@latest"
+      ]
+    },
+    "mcp-news": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-news"
+      ],
+      "disabled": false
+    }
+  }
+}

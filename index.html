@@ -47,6 +47,7 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    padding-bottom: 42px;   /* room for the fixed headlines ticker */
     -webkit-font-smoothing: antialiased;
   }
 
@@ -303,6 +304,76 @@
   .ctrl:disabled { opacity: 0.35; cursor: not-allowed; }
   .ctrl.danger:hover:not(:disabled) { border-color: var(--p2); color: var(--p2); }
 
+  /* --- sports headlines ticker, pinned along the bottom of the court --- */
+  .ticker {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 2;
+    display: flex;
+    align-items: stretch;
+    height: 42px;
+    background: var(--surface);
+    border-top: 1px solid var(--line-strong);
+  }
+  .ticker-label {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    padding: 0 1rem;
+    background: var(--ball);
+    color: var(--bg);
+    font-size: 0.6rem;
+    font-weight: 900;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .ticker-view {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 2%, #000 97%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 2%, #000 97%, transparent);
+  }
+  .ticker-track {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    white-space: nowrap;
+    will-change: transform;
+  }
+  .ticker-track .item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    color: var(--text);
+  }
+  .ticker-track .src {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ticker-track .sep { color: var(--ball); font-size: 0.5rem; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .ticker-track { animation: ticker-scroll linear infinite; }
+    .ticker:hover .ticker-track,
+    .ticker:focus-within .ticker-track { animation-play-state: paused; }
+    @keyframes ticker-scroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }   /* the list is duplicated, so -50% loops seamlessly */
+    }
+  }
+  /* reduced motion: hold the headlines still, let them be scrolled by hand instead */
+  @media (prefers-reduced-motion: reduce) {
+    .ticker-view { overflow-x: auto; }
+  }
+
   :is(button, input):focus-visible {
     outline: 2px solid var(--ball);
     outline-offset: 2px;
@@ -379,6 +450,16 @@
   <button class="ctrl" id="undoBtn" data-page-node-id="0CBroy1aQ8QFVwQkQtpasf">Undo</button>
   <button class="ctrl danger" id="newBtn" data-page-node-id="3cIbTLX8fqXHLchgzbJPkZ">New Match</button>
 </footer>
+
+<!-- Sports headlines ticker. The headlines are baked into the NEWS array in the script
+     below (not fetched at runtime) so the board keeps its zero-network guarantee.
+     See the note above that array for how they were produced. -->
+<div class="ticker" role="region" aria-label="Sports headlines">
+  <span class="ticker-label">Sports</span>
+  <div class="ticker-view">
+    <div class="ticker-track" id="tickerTrack"></div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -557,7 +638,54 @@
     }
   }
 
+  // ------- sports headlines ticker -------
+  // Compiled in on purpose: the board must run with zero network requests, and a static
+  // file cannot talk to a local MCP server at runtime. These headlines come from the
+  // `mcp-news` MCP server (tool: news(topic, date?, sort?)), which searches NewsAPI.org.
+  // To refresh: run that tool and paste the new titles below. Nothing else to change.
+  var NEWS = [
+    { t: "Shelton stuns defending champion Alcaraz in five sets, sets up all-American US Open semi", s: "Reuters" },
+    { t: "Tiafoe battles back from two sets down to reach the US Open semi-finals", s: "Reuters" },
+    { t: "Zverev meets Khachanov as the top seed chases a second major title", s: "Reuters" },
+    { t: "Rybakina beats Gauff to reach her first US Open final", s: "CBS Sports" },
+    { t: "Sabalenka stays on course for a third straight US Open crown", s: "CBS Sports" },
+    { t: "Zheng Qinwen's US Open run ends in the quarter-finals against Rybakina", s: "Xinhua" },
+    { t: "Rybakina set to become the WTA world No.1 for the first time", s: "Huanqiu" },
+    { t: "Zheng Qinwen confirmed for the China Open with a wildcard", s: "Huanqiu" },
+    { t: "49ers rout Rams 27-7 in the NFL's first regular-season game in Australia", s: "NFL.com" },
+    { t: "Purdy throws three touchdowns as the 49ers silence the Super Bowl favourites", s: "NFL.com" },
+    { t: "Week 1 injury wave: A.J. Brown feared out until mid-October", s: "CBS Sports" },
+    { t: "No.1 Ohio State vs No.4 Texas headlines college football's Week 2", s: "CBS Sports" },
+    { t: "Bayern run out 5-0 winners over Bodo/Glimt as Champions League matchday one closes", s: "CBS Sports" }
+  ];
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // Build the strip twice so the -50% translate loops with no visible seam.
+  function renderTicker() {
+    var track = el("tickerTrack");
+    var strip = NEWS.map(function (n) {
+      return '<span class="item">' + escapeHtml(n.t) +
+             '<span class="src">' + escapeHtml(n.s) + '</span></span>' +
+             '<span class="sep" aria-hidden="true">\u25CF</span>';
+    }).join("");
+    track.innerHTML = strip + strip;
+
+    // Pace the scroll to the content width (~55px per second) so short and long
+    // headline lists both read at a comfortable speed.
+    requestAnimationFrame(function () {
+      var half = track.scrollWidth / 2;
+      if (half > 0) track.style.animationDuration = Math.max(25, Math.round(half / 55)) + "s";
+    });
+  }
+
   // ------- wiring -------
+  renderTicker();
+
   els.btns[0].addEventListener("click", function () { awardPoint(0); });
   els.btns[1].addEventListener("click", function () { awardPoint(1); });
   els.undo.addEventListener("click", undo);
